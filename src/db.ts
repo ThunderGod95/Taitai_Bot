@@ -73,6 +73,27 @@ db.query(
 `,
 ).run();
 
+db.query(
+    `
+    CREATE TABLE IF NOT EXISTS server_admins (
+        user_id TEXT PRIMARY KEY,
+        username TEXT NOT NULL
+    )
+`,
+).run();
+
+export const getAdminsQuery = db.query<
+    { user_id: string; username: string },
+    []
+>(`SELECT user_id, username FROM server_admins`);
+
+export const addAdminQuery = db.query<
+    void,
+    { $user_id: string; $username: string }
+>(`INSERT INTO server_admins (user_id, username) VALUES ($user_id, $username)`);
+
+export const clearAdminsQuery = db.query<void, []>(`DELETE FROM server_admins`);
+
 export const getUserQuery = db.query<User, { $id: string }>(
     `SELECT id, username, avatar_url, xp, lifetime_xp, level, messages_sent, reactions_given, voice_time_minutes FROM users WHERE id = $id`,
 );

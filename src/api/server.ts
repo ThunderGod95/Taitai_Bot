@@ -9,6 +9,7 @@ import type { Client } from "discord.js";
 import { serverRolesRoutes } from "./handlers/serverRoles";
 import { channelsRoutes } from "./handlers/channels";
 import { logger } from "@/utils/logger";
+import { adminsRoutes } from "./handlers/admin";
 
 export let config: Settings = getSettings();
 
@@ -18,6 +19,7 @@ export const startApiServer = (client: Client) => {
         .use(roleRewardsRoutes)
         .use(leaderboardRoutes)
         .use(userRoutes)
+        .use(adminsRoutes)
         .use(serverRolesRoutes(client))
         .use(channelsRoutes(client))
         .listen(3000);

@@ -1,4 +1,7 @@
 import winston from "winston";
+import path from "path";
+
+const logFilePath = path.join(process.cwd(), "logs", "bot.log");
 
 export const logger = winston.createLogger({
     level: "info",
@@ -12,6 +15,6 @@ export const logger = winston.createLogger({
     ),
     transports: [
         new winston.transports.Console(),
-        new winston.transports.File({ filename: "bot.log" }),
+        new winston.transports.File({ filename: logFilePath }),
     ],
 });
