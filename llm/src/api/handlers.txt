@@ -1,0 +1,266 @@
+// ==========================================
+// File: src\api\handlers\channels.ts
+// ==========================================
+
+import { Elysia } from "elysia";
+import { ChannelType, type Client } from "discord.js";
+
+export const channelsRoutes = (client: Client) =>
+    new Elysia({ prefix: "/api/channels" }).guard(
+        {
+            beforeHandle: ({ headers, set }) => {
+                if (
+                    headers.authorization !== `Bearer ${process.env.API_TOKEN}`
+                ) {
+                    set.status = 401;
+                    return { error: "Unauthorized" };
+                }
+            },
+        },
+        (app) =>
+            app.get("/", async ({ set }) => {
+                const guild = client.guilds.cache.first();
+
+                if (!guild) {
+                    set.status = 404;
+                    return { error: "Bot is not in any server yet." };
+                }
+
+                const channels = guild.channels.cache
+                    .filter((c) => c.type === ChannelType.GuildText)
+                    .map((c) => ({
+                        id: c.id,
+                        name: c.name,
+                        position: c.position,
+                    }))
+                    .sort((a, b) => a.position - b.position);
+
+                return channels;
+            }),
+    );
+
+
+// ==========================================
+// File: src\api\handlers\leaderboard.ts
+// ==========================================
+
+import { Elysia } from "elysia";
+import { fetchLeaderboardData } from "@/services/dataService";
+
+export const leaderboardRoutes = new Elysia({ prefix: "/api/leaderboard" }).get(
+    "/",
+    ({ query: { timeframe = "overall", limit = "10" } }) => {
+        const parsedLimit = parseInt(limit, 10);
+        const data = fetchLeaderboardData(parsedLimit, timeframe);
+
+        return {
+            timeframe,
+            limit: parsedLimit,
+            leaderboard: data,
+        };
+    },
+);
+
+
+// ==========================================
+// File: src\api\handlers\roleRewards.ts
+// ==========================================
+
+import { Elysia, t } from "elysia";
+import {
+    deleteRoleRewardQuery,
+    getRoleRewardsQuery,
+    upsertRoleRewardQuery,
+} from "@/db";
+
+export const roleRewardsRoutes = new Elysia({ prefix: "/api/roles" }).guard(
+    {
+        beforeHandle: ({ headers, set }) => {
+            if (headers.authorization !== `Bearer ${process.env.API_TOKEN}`) {
+                set.status = 401;
+                return { error: "Unauthorized" };
+            }
+        },
+    },
+    (app) =>
+        app
+            .get("/", () => getRoleRewardsQuery.all())
+            .post(
+                "/",
+                ({ body, set }) => {
+                    try {
+                        upsertRoleRewardQuery.run({
+                            $level: body.level,
+                            $role_id: body.role_id,
+                        });
+                        return { success: true };
+                    } catch (err) {
+                        set.status = 400;
+                        return { error: "Invalid body" };
+                    }
+                },
+                {
+                    body: t.Object({
+                        level: t.Number(),
+                        role_id: t.String(),
+                    }),
+                },
+            )
+            .delete("/", ({ query: { level }, set }) => {
+                const parsedLevel = parseInt(level || "0", 10);
+                if (parsedLevel > 0) {
+                    deleteRoleRewardQuery.run({ $level: parsedLevel });
+                    return { success: true };
+                }
+
+                set.status = 400;
+                return { error: "Invalid level parameter" };
+            }),
+);
+
+
+// ==========================================
+// File: src\api\handlers\serverRoles.ts
+// ==========================================
+
+import { Elysia } from "elysia";
+import type { Client } from "discord.js";
+import { logger } from "@/utils/logger";
+
+export const serverRolesRoutes = (client: Client) =>
+    new Elysia({ prefix: "/api/server-roles" }).guard(
+        {
+            beforeHandle: ({ headers, set }) => {
+                if (
+                    headers.authorization !== `Bearer ${process.env.API_TOKEN}`
+                ) {
+                    set.status = 401;
+                    return { error: "Unauthorized" };
+                }
+            },
+        },
+        (app) =>
+            app.get("/", async ({ set }) => {
+                const guild = client.guilds.cache.first();
+
+                if (!guild) {
+                    set.status = 404;
+                    return { error: "Bot is not in any server yet." };
+                }
+
+                try {
+                    const roles = guild.roles.cache.map((role) => {
+                        const colors = role.colors;
+
+                        return {
+                            id: role.id,
+                            name: role.name,
+                            color: role.hexColor,
+                            icon_url: role.iconURL(),
+                            primary_color:
+                                colors?.primaryColor != null
+                                    ? `#${colors.primaryColor.toString(16).padStart(6, "0")}`
+                                    : null,
+                            secondary_color:
+                                colors?.secondaryColor != null
+                                    ? `#${colors.secondaryColor.toString(16).padStart(6, "0")}`
+                                    : null,
+                            tertiary_color:
+                                colors?.tertiaryColor != null
+                                    ? `#${colors.tertiaryColor.toString(16).padStart(6, "0")}`
+                                    : null,
+                            position: role.position,
+                            managed: role.managed,
+                        };
+                    });
+
+                    return roles.sort((a, b) => b.position - a.position);
+                } catch (error) {
+                    logger.error("Error fetching roles:", error);
+                    set.status = 500;
+                    return { error: "Failed to fetch roles" };
+                }
+            }),
+    );
+
+
+// ==========================================
+// File: src\api\handlers\settings.ts
+// ==========================================
+
+import { Elysia } from "elysia";
+import { updateSettingsQuery } from "@/db";
+import { config } from "../server";
+import type { Settings } from "@/types";
+
+export const settingsRoutes = new Elysia({ prefix: "/api/settings" }).guard(
+    {
+        beforeHandle: ({ headers, set }) => {
+            if (headers.authorization !== `Bearer ${process.env.API_TOKEN}`) {
+                set.status = 401;
+                return { error: "Unauthorized" };
+            }
+        },
+    },
+    (app) =>
+        app
+            .get("/", () => config)
+            .post("/", ({ body, set }) => {
+                try {
+                    const settingsBody = body as Partial<Settings>;
+                    Object.assign(config, settingsBody);
+
+                    updateSettingsQuery.run({
+                        $base_xp: config.base_xp,
+                        $growth_exponent: config.growth_exponent,
+                        $text_min_xp: config.text_min_xp,
+                        $text_max_xp: config.text_max_xp,
+                        $reaction_min_xp: config.reaction_min_xp,
+                        $reaction_max_xp: config.reaction_max_xp,
+                        $voice_min_xp: config.voice_min_xp,
+                        $voice_max_xp: config.voice_max_xp,
+                        $cooldown: config.cooldown,
+                        $text_xp_enabled: config.text_xp_enabled ? 1 : 0,
+                        $reaction_xp_enabled: config.reaction_xp_enabled
+                            ? 1
+                            : 0,
+                        $voice_xp_enabled: config.voice_xp_enabled ? 1 : 0,
+                        $reaction_xp_mode: config.reaction_xp_mode,
+                        $voice_min_users: config.voice_min_users,
+                        $role_reward_mode: config.role_reward_mode,
+                        $level_up_channel_id:
+                            config.level_up_channel_id ?? null,
+                        $level_up_message: config.level_up_message,
+                    });
+
+                    return { success: true, newConfig: config };
+                } catch (err) {
+                    set.status = 400;
+                    return { error: "Invalid JSON body" };
+                }
+            }),
+);
+
+
+// ==========================================
+// File: src\api\handlers\user.ts
+// ==========================================
+
+import { Elysia } from "elysia";
+import { fetchUserRankData } from "@/services/dataService";
+
+export const userRoutes = new Elysia({ prefix: "/api/users" }).get(
+    "/:id",
+    ({ params: { id }, set }) => {
+        const rankData = fetchUserRankData(id);
+
+        if (!rankData) {
+            set.status = 404;
+            return { error: "User not found" };
+        }
+
+        return rankData;
+    },
+);
+
+

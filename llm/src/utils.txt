@@ -1,0 +1,161 @@
+// ==========================================
+// File: src\utils\commandContext.ts
+// ==========================================
+
+import { ChatInputCommandInteraction, TextChannel, type Message, type User } from "discord.js";
+
+export class CommandContext {
+    public readonly raw: ChatInputCommandInteraction | Message;
+    public readonly isInteraction: boolean;
+    public readonly user: User;
+    private replyMessage: Message | null = null;
+
+    constructor(payload: ChatInputCommandInteraction | Message) {
+        this.raw = payload;
+        this.isInteraction = payload instanceof ChatInputCommandInteraction;
+        this.user = this.isInteraction
+            ? (payload as ChatInputCommandInteraction).user
+            : (payload as Message).author;
+    }
+
+    async deferReply() {
+        if (this.isInteraction) {
+            await (this.raw as ChatInputCommandInteraction).deferReply();
+        } else {
+            await ((this.raw as Message).channel as TextChannel).sendTyping();
+        }
+    }
+
+    async editReply(content: any) {
+        if (this.isInteraction) {
+            return await (this.raw as ChatInputCommandInteraction).editReply(content);
+        } else {
+            if (this.replyMessage) {
+                return await this.replyMessage.edit(content);
+            } else {
+                this.replyMessage = await (this.raw as Message).reply(content);
+                return this.replyMessage;
+            }
+        }
+    }
+
+    getTargetUser(): User {
+            if (this.isInteraction) {
+                return (this.raw as ChatInputCommandInteraction).options.getUser("user") || this.user;
+            } else {
+                const msg = this.raw as Message;
+                // Check for explicit @mentions
+                const mention = msg.mentions.users.first();
+                if (mention) return mention;
+
+                // Check for raw IDs passed as the first argument
+                const args = msg.content.split(/ +/).slice(1);
+                if (args[0]) {
+                    const rawId = args[0].replace(/[<@!>]/g, '');
+                    const cachedUser = msg.client.users.cache.get(rawId);
+                    if (cachedUser) return cachedUser;
+                }
+
+                return this.user;
+            }
+        }
+}
+
+
+// ==========================================
+// File: src\utils\commandRegistry.ts
+// ==========================================
+
+import { Collection } from "discord.js";
+import fs from "fs";
+import path from "path";
+import { logger } from "./logger";
+
+export const loadCommands = async () => {
+    const commands = new Collection<string, any>();
+    const restPayloads: any[] = [];
+
+    const commandsPath = path.join(__dirname, "../commands");
+    const commandFiles = fs
+        .readdirSync(commandsPath)
+        .filter((file) => file.match(/\.(ts|js)$/));
+
+    for (const file of commandFiles) {
+        const filePath = path.join(commandsPath, file);
+        const commandModule = await import(filePath);
+
+        if ("data" in commandModule && "execute" in commandModule) {
+            commands.set(commandModule.data.name, commandModule);
+            restPayloads.push(commandModule.data.toJSON());
+
+            if ("aliasData" in commandModule) {
+                commands.set(commandModule.aliasData.name, commandModule);
+                restPayloads.push(commandModule.aliasData.toJSON());
+            }
+        } else {
+            logger.warn(
+                `The command at ${filePath} is missing a required "data" or "execute" property.`,
+            );
+        }
+    }
+
+    return { commands, restPayloads };
+};
+
+
+// ==========================================
+// File: src\utils\logger.ts
+// ==========================================
+
+import winston from "winston";
+
+export const logger = winston.createLogger({
+    level: "info",
+    format: winston.format.combine(
+        winston.format.timestamp({ format: "YYYY-MM-DD HH:mm:ss" }),
+        winston.format.errors({ stack: true }),
+        winston.format.printf((info) => {
+            const stack = info.stack ? `\n${info.stack}` : "";
+            return `[${info.timestamp}] ${info.level.toUpperCase()}: ${info.message}${stack}`;
+        }),
+    ),
+    transports: [
+        new winston.transports.Console(),
+        new winston.transports.File({ filename: "bot.log" }),
+    ],
+});
+
+
+// ==========================================
+// File: src\utils\messageFormatter.ts
+// ==========================================
+
+import type { Role, User } from "discord.js";
+
+export const formatLevelUpMessage = (
+    template: string,
+    user: User,
+    level: number,
+    xp: number,
+    earnedRole?: Role | null,
+): string => {
+    let formatted = template
+        .replace(/\{user\.mention\}/g, `<@${user.id}>`)
+        .replace(/\{user\.name\}/g, user.username)
+        .replace(/\{user\.level\}/g, level.toString())
+        .replace(/\{user\.xp\}/g, xp.toString());
+
+    formatted = formatted.replace(/\{earned:(.*?)\}/g, (match, innerText) => {
+        if (!earnedRole) return "";
+
+        return innerText
+            .replace(/\{name\}/g, earnedRole.name)
+            .replace(/\{mention\}/g, `<@&${earnedRole.id}>`);
+    });
+
+    return formatted;
+
+    return "";
+};
+
+

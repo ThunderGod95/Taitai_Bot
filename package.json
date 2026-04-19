@@ -1,0 +1,23 @@
+{
+    "name": "shaohui",
+    "module": "index.ts",
+    "type": "module",
+    "private": true,
+    "scripts": {
+        "start": "bun run dist/index.js",
+        "dev": "bun run --watch src/index.ts",
+        "build": "bun build ./src/index.ts --outdir ./dist --target bun"
+    },
+    "devDependencies": {
+        "@types/bun": "latest"
+    },
+    "peerDependencies": {
+        "typescript": "^5"
+    },
+    "dependencies": {
+        "@napi-rs/canvas": "^0.1.99",
+        "discord.js": "^14.26.2",
+        "elysia": "^1.4.28",
+        "winston": "^3.19.0"
+    }
+}

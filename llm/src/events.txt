@@ -1,0 +1,228 @@
+// ==========================================
+// File: src\events\interactionCreate.ts
+// ==========================================
+
+import { MessageFlags, type Interaction } from "discord.js";
+import { CommandContext } from "@/utils/commandContext";
+import { logger } from "@/utils/logger";
+
+export const handleInteractionCreate = async (interaction: Interaction) => {
+    if (!interaction.isChatInputCommand()) return;
+
+    const command = interaction.client.commands.get(interaction.commandName);
+    if (!command) {
+        logger.error(
+            `No command matching ${interaction.commandName} was found.`,
+        );
+        return;
+    }
+
+    try {
+        const ctx = new CommandContext(interaction);
+        await command.execute(ctx);
+    } catch (error) {
+        logger.error(`Error executing ${interaction.commandName}:`, error);
+        if (interaction.replied || interaction.deferred) {
+            await interaction.followUp({
+                content: "There was an error while executing this command!",
+                flags: MessageFlags.Ephemeral,
+            });
+        } else {
+            await interaction.reply({
+                content: "There was an error while executing this command!",
+                flags: MessageFlags.Ephemeral,
+            });
+        }
+    }
+};
+
+
+// ==========================================
+// File: src\events\messageCreate.ts
+// ==========================================
+
+import { Message } from "discord.js";
+import { config } from "@/api/server";
+import { handleXp } from "@/services/xpService";
+import { processRoleRewards } from "@/services/roleService";
+import { CommandContext } from "@/utils/commandContext";
+import { dispatchLevelUpMessage } from "@/services/notificationService";
+import { logger } from "@/utils/logger";
+
+export const handleMessageCreate = async (message: Message) => {
+    if (message.author.bot || !message.guild) return;
+
+    const prefix = ".";
+    if (message.content.startsWith(prefix)) {
+        const args = message.content.slice(prefix.length).trim().split(/ +/);
+        const commandName = args.shift()?.toLowerCase();
+
+        if (commandName) {
+            const command = message.client.commands.get(commandName);
+
+            if (command) {
+                try {
+                    const ctx = new CommandContext(message);
+                    await command.execute(ctx);
+                } catch (error) {
+                    logger.error(
+                        `Error executing prefix command ${commandName}:`,
+                        error,
+                    );
+                    await message.reply(
+                        "There was an error while executing this command!",
+                    );
+                }
+                return;
+            }
+        }
+    }
+
+    // XP Handling
+    if (!config.text_xp_enabled) return;
+
+    const avatarUrl = message.author.displayAvatarURL({
+        extension: "png",
+        size: 256,
+    });
+
+    const result = handleXp(
+        message.author.id,
+        message.author.username,
+        avatarUrl,
+        config.text_min_xp,
+        config.text_max_xp,
+        "message",
+        `text_${message.author.id}`,
+    );
+
+    if (result?.leveledUp) {
+        const earnedRole = await processRoleRewards(
+            message.member!,
+            result.newLevel,
+        );
+        await dispatchLevelUpMessage(
+            message.member!,
+            result.newLevel,
+            result.xp,
+            earnedRole,
+        );
+    }
+};
+
+
+// ==========================================
+// File: src\events\messageReactionAdd.ts
+// ==========================================
+
+import {
+    MessageReaction,
+    type PartialMessageReaction,
+    User,
+    type PartialUser,
+} from "discord.js";
+import { config } from "@/api/server";
+import { handleXp } from "@/services/xpService";
+import { processRoleRewards } from "@/services/roleService";
+import { dispatchLevelUpMessage } from "@/services/notificationService";
+import { logger } from "@/utils/logger";
+
+export const handleMessageReactionAdd = async (
+    reaction: MessageReaction | PartialMessageReaction,
+    user: User | PartialUser,
+) => {
+    if (!config.reaction_xp_enabled || user.bot || !reaction.message.guild)
+        return;
+
+    if (reaction.partial) {
+        try {
+            await reaction.fetch();
+        } catch (error) {
+            logger.error("Failed to fetch reaction:", error);
+            return;
+        }
+    }
+
+    if (reaction.message.partial) {
+        try {
+            await reaction.message.fetch();
+        } catch (error) {
+            logger.error("Failed to fetch message:", error);
+            return;
+        }
+    }
+
+    const { reaction_xp_mode, reaction_min_xp, reaction_max_xp } = config;
+
+    if (reaction_xp_mode === "reactor" || reaction_xp_mode === "both") {
+        const reactorResult = handleXp(
+            user.id,
+            user.username || "Unknown",
+            user.displayAvatarURL({ extension: "png", size: 256 }),
+            reaction_min_xp,
+            reaction_max_xp,
+            "reaction",
+            `react_${user.id}`,
+        );
+
+        if (reactorResult?.leveledUp) {
+            const member =
+                reaction.message.guild.members.cache.get(user.id) ||
+                (await reaction.message.guild.members
+                    .fetch(user.id)
+                    .catch(() => null));
+
+            if (member) {
+                const earnedRole = await processRoleRewards(
+                    member,
+                    reactorResult.newLevel,
+                );
+                await dispatchLevelUpMessage(
+                    member,
+                    reactorResult.newLevel,
+                    reactorResult.xp,
+                    earnedRole,
+                );
+            }
+        }
+    }
+
+    if (reaction_xp_mode === "author" || reaction_xp_mode === "both") {
+        const author = reaction.message.author;
+
+        if (author && !author.bot) {
+            const authorResult = handleXp(
+                author.id,
+                author.username,
+                author.displayAvatarURL({ extension: "png", size: 256 }),
+                reaction_min_xp,
+                reaction_max_xp,
+                "reaction_received",
+                `receive_react_${author.id}`,
+            );
+
+            if (authorResult?.leveledUp) {
+                const member =
+                    reaction.message.guild.members.cache.get(author.id) ||
+                    (await reaction.message.guild.members
+                        .fetch(author.id)
+                        .catch(() => null));
+
+                if (member) {
+                    const earnedRole = await processRoleRewards(
+                        member,
+                        authorResult.newLevel,
+                    );
+                    await dispatchLevelUpMessage(
+                        member,
+                        authorResult.newLevel,
+                        authorResult.xp,
+                        earnedRole,
+                    );
+                }
+            }
+        }
+    }
+};
+
+
