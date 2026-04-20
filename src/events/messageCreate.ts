@@ -1,9 +1,7 @@
 import { Message } from "discord.js";
 import { config } from "@/api/server";
-import { handleXp } from "@/services/xpService";
-import { processRoleRewards } from "@/services/roleService";
+import { awardXpAndProcessLevelUp } from "@/services/xpService";
 import { CommandContext } from "@/utils/commandContext";
-import { dispatchLevelUpMessage } from "@/services/notificationService";
 import { logger } from "@/utils/logger";
 
 export const handleMessageCreate = async (message: Message) => {
@@ -38,31 +36,14 @@ export const handleMessageCreate = async (message: Message) => {
     // XP Handling
     if (!config.text_xp_enabled) return;
 
-    const avatarUrl = message.author.displayAvatarURL({
-        extension: "png",
-        size: 256,
-    });
-
-    const result = handleXp(
+    await awardXpAndProcessLevelUp(
+        message.member,
         message.author.id,
         message.author.username,
-        avatarUrl,
+        message.author.displayAvatarURL({ extension: "png", size: 256 }),
         config.text_min_xp,
         config.text_max_xp,
         "message",
         `text_${message.author.id}`,
     );
-
-    if (result?.leveledUp) {
-        const earnedRole = await processRoleRewards(
-            message.member!,
-            result.newLevel,
-        );
-        await dispatchLevelUpMessage(
-            message.member!,
-            result.newLevel,
-            result.xp,
-            earnedRole,
-        );
-    }
 };

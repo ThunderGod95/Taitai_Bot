@@ -1,7 +1,7 @@
 export interface Settings {
     id?: number;
     base_xp: number;
-    growth_exponent: number;
+    multiplier: number;
     text_min_xp: number;
     text_max_xp: number;
     reaction_min_xp: number;
@@ -39,4 +39,10 @@ export interface User {
 export interface RoleReward {
     level: number;
     role_id: string;
+}
+
+export interface BoosterRole {
+    role_id: string;
+    name: string;
+    multiplier: number;
 }

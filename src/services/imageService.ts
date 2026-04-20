@@ -1,5 +1,7 @@
 import type { User } from "@/types";
-import { createCanvas, loadImage, GlobalFonts } from "@napi-rs/canvas";
+import { logger } from "@/utils/logger";
+import { createCanvas, loadImage } from "@napi-rs/canvas";
+import millify from "millify";
 
 export const generateRankCard = async (userData: any) => {
     const canvas = createCanvas(800, 250);
@@ -82,11 +84,13 @@ export const generateRankCard = async (userData: any) => {
     const barRadius = 12;
 
     // XP Text
-    const xpText = `${userData.currentLevelProgress} / ${userData.xpNeededForLevel} XP`;
+    const currentXp = millify(userData.currentLevelProgress);
+    const neededXp = millify(userData.xpNeededForLevel);
+    const xpText = `${currentXp} / ${neededXp} XP`;
     ctx.fillStyle = "#a6adc8";
-    ctx.font = "bold 16px sans-serif";
+    ctx.font = "bold 22px sans-serif";
     const xpTextWidth = ctx.measureText(xpText).width;
-    ctx.fillText(xpText, barX + barWidth - xpTextWidth, barY - 10);
+    ctx.fillText(xpText, barX + barWidth - xpTextWidth, barY - 12);
 
     // Progress Bar
     ctx.fillStyle = "#313244";
@@ -126,9 +130,9 @@ export const generateRankCard = async (userData: any) => {
 
 export const generateLeaderboardImage = async (
     data: any[],
-    timeframe: string,
+    type: string,
 ) => {
-    const rowHeight = 95;
+    const rowHeight = 88;
     const paddingTop = 30;
     const paddingBottom = 20;
     const canvasHeight = paddingTop + data.length * rowHeight + paddingBottom;
@@ -136,7 +140,6 @@ export const generateLeaderboardImage = async (
     const canvas = createCanvas(800, canvasHeight);
     const ctx = canvas.getContext("2d");
 
-    // Background
     const bgGradient = ctx.createLinearGradient(
         0,
         0,
@@ -148,24 +151,14 @@ export const generateLeaderboardImage = async (
     ctx.fillStyle = bgGradient;
     ctx.fillRect(0, 0, canvas.width, canvas.height);
 
-    const avatars = await Promise.all(
-        data.map(async (user) => {
-            if (!user.avatar_url) return null;
-            try {
-                return await loadImage(user.avatar_url);
-            } catch {
-                return null;
-            }
-        }),
-    );
+    const avatars = await loadAvatars(data);
 
     for (let i = 0; i < data.length; i++) {
         const user = data[i];
         const yOffset = paddingTop + i * rowHeight;
 
-        const avatar = avatars[i];
-        const avatarSize = 64;
-        const avatarY = yOffset + 12;
+        const avatarSize = 70;
+        const avatarY = yOffset + 8;
         const avatarCenterX = 40 + avatarSize / 2;
         const avatarCenterY = avatarY + avatarSize / 2;
 
@@ -181,41 +174,54 @@ export const generateLeaderboardImage = async (
         );
         ctx.clip();
 
-        if (avatar) {
-            ctx.drawImage(avatar, 40, avatarY, avatarSize, avatarSize);
+        if (avatars[i]) {
+            ctx.drawImage(avatars[i]!, 40, avatarY, avatarSize, avatarSize);
+        } else {
+            ctx.fillStyle = "#313244";
+            ctx.fillRect(40, avatarY, avatarSize, avatarSize);
         }
         ctx.restore();
 
         const textY = yOffset + 50;
-        const textStartX = 120;
+        const textStartX = 125;
 
         ctx.fillStyle = i < 3 ? "#f9e2af" : "#a6adc8";
-        ctx.font = "bold 32px sans-serif";
+        ctx.font = "bold 38px sans-serif";
         const rankText = `#${i + 1}`;
         ctx.fillText(rankText, textStartX, textY);
         const rankWidth = ctx.measureText(rankText).width;
 
         ctx.fillStyle = "#cdd6f4";
-        ctx.font = "bold 40px sans-serif";
+        ctx.font = "bold 46px sans-serif";
         ctx.fillText(
             `${user?.username || "unknown"}`,
-            textStartX + rankWidth + 12,
+            textStartX + rankWidth + 15,
             textY,
         );
 
         ctx.fillStyle = "#cdd6f4";
-        ctx.font = "bold 30px sans-serif";
-        const rightSideText =
-            timeframe === "overall"
-                ? `LVL: ${user?.level}`
-                : `+${user?.total_xp!} XP`;
+        ctx.font = "bold 36px sans-serif";
+
+        const formattedStat = user?.total_xp ? millify(user.total_xp) : "0";
+
+        let rightSideText = "";
+        if (type === "overall") {
+            rightSideText = `LVL: ${user?.level || 0}`;
+        } else if (type === "reactions") {
+            rightSideText = `${formattedStat}`;
+        } else if (type === "voice") {
+            rightSideText = `${formattedStat} Mins`;
+        } else {
+            rightSideText = `+${formattedStat} XP`;
+        }
 
         const textWidth = ctx.measureText(rightSideText).width;
         ctx.fillText(`${rightSideText}`, 760 - textWidth, textY);
 
         const barX = textStartX;
-        const barY = yOffset + 70;
+        const barY = yOffset + 68;
         const barWidth = 760 - textStartX;
+
         const barHeight = 6;
 
         ctx.fillStyle = "#313244";
@@ -223,7 +229,10 @@ export const generateLeaderboardImage = async (
         ctx.roundRect(barX, barY, barWidth, barHeight, 3);
         ctx.fill();
 
-        const progress = Math.min(Math.max(user.xp / user.xpNeeded, 0), 1);
+        const progress = Math.min(
+            Math.max((user.xp || 0) / (user.xpNeeded || 1), 0),
+            1,
+        );
         const fillWidth = progress * barWidth;
 
         if (fillWidth > 0) {
@@ -236,3 +245,43 @@ export const generateLeaderboardImage = async (
 
     return canvas.toBuffer("image/png");
 };
+
+async function loadAvatars(data: any[]) {
+    const avatars = await Promise.all(
+        data.map(async (user: User) => {
+            if (!user.avatar_url) return null;
+            try {
+                const controller = new AbortController();
+                const timeoutId = setTimeout(() => controller.abort(), 3000);
+
+                const response = await fetch(user.avatar_url, {
+                    headers: {
+                        "User-Agent":
+                            "DiscordBot (https://github.com/discordjs/discord.js, 14.14.1)",
+                    },
+                    signal: controller.signal,
+                });
+
+                clearTimeout(timeoutId);
+
+                if (!response.ok) {
+                    logger.error(
+                        `[Avatar CDN Error] ${user.username}: ${response.status} ${response.statusText}`,
+                    );
+                    return null;
+                }
+
+                const arrayBuffer = await response.arrayBuffer();
+                return await loadImage(Buffer.from(arrayBuffer));
+            } catch (error) {
+                logger.error(
+                    `[Avatar Fetch Error] Failed for ${user.username}:`,
+                    error,
+                );
+                return null;
+            }
+        }),
+    );
+
+    return avatars;
+}

@@ -2,6 +2,7 @@ import { SlashCommandBuilder, AttachmentBuilder } from "discord.js";
 import { fetchUserRankData } from "@/services/dataService";
 import { generateRankCard } from "@/services/imageService";
 import { CommandContext } from "@/utils/commandContext";
+import { BOT_UNKNOWNS } from "@/services/xpService";
 
 export const data = new SlashCommandBuilder()
     .setName("rank")
@@ -27,6 +28,11 @@ export const execute = async (ctx: CommandContext) => {
     await ctx.deferReply();
 
     const targetUser = ctx.getTargetUser();
+
+    if (BOT_UNKNOWNS.includes(targetUser.id)) {
+        return ctx.editReply("We dare not measure the heavens.");
+    }
+
     const rankData = fetchUserRankData(targetUser.id);
 
     if (!rankData) {

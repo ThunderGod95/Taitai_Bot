@@ -5,9 +5,7 @@ import {
     type PartialUser,
 } from "discord.js";
 import { config } from "@/api/server";
-import { handleXp } from "@/services/xpService";
-import { processRoleRewards } from "@/services/roleService";
-import { dispatchLevelUpMessage } from "@/services/notificationService";
+import { awardXpAndProcessLevelUp } from "@/services/xpService";
 import { logger } from "@/utils/logger";
 
 export const handleMessageReactionAdd = async (
@@ -36,9 +34,16 @@ export const handleMessageReactionAdd = async (
     }
 
     const { reaction_xp_mode, reaction_min_xp, reaction_max_xp } = config;
+    const guild = reaction.message.guild;
 
+    // Process Reactor
     if (reaction_xp_mode === "reactor" || reaction_xp_mode === "both") {
-        const reactorResult = handleXp(
+        const reactorMember =
+            guild.members.cache.get(user.id) ||
+            (await guild.members.fetch(user.id).catch(() => null));
+
+        await awardXpAndProcessLevelUp(
+            reactorMember,
             user.id,
             user.username || "Unknown",
             user.displayAvatarURL({ extension: "png", size: 256 }),
@@ -47,34 +52,19 @@ export const handleMessageReactionAdd = async (
             "reaction",
             `react_${user.id}`,
         );
-
-        if (reactorResult?.leveledUp) {
-            const member =
-                reaction.message.guild.members.cache.get(user.id) ||
-                (await reaction.message.guild.members
-                    .fetch(user.id)
-                    .catch(() => null));
-
-            if (member) {
-                const earnedRole = await processRoleRewards(
-                    member,
-                    reactorResult.newLevel,
-                );
-                await dispatchLevelUpMessage(
-                    member,
-                    reactorResult.newLevel,
-                    reactorResult.xp,
-                    earnedRole,
-                );
-            }
-        }
     }
 
+    // Process Message Author
     if (reaction_xp_mode === "author" || reaction_xp_mode === "both") {
         const author = reaction.message.author;
 
         if (author && !author.bot) {
-            const authorResult = handleXp(
+            const authorMember =
+                guild.members.cache.get(author.id) ||
+                (await guild.members.fetch(author.id).catch(() => null));
+
+            await awardXpAndProcessLevelUp(
+                authorMember,
                 author.id,
                 author.username,
                 author.displayAvatarURL({ extension: "png", size: 256 }),
@@ -83,27 +73,6 @@ export const handleMessageReactionAdd = async (
                 "reaction_received",
                 `receive_react_${author.id}`,
             );
-
-            if (authorResult?.leveledUp) {
-                const member =
-                    reaction.message.guild.members.cache.get(author.id) ||
-                    (await reaction.message.guild.members
-                        .fetch(author.id)
-                        .catch(() => null));
-
-                if (member) {
-                    const earnedRole = await processRoleRewards(
-                        member,
-                        authorResult.newLevel,
-                    );
-                    await dispatchLevelUpMessage(
-                        member,
-                        authorResult.newLevel,
-                        authorResult.xp,
-                        earnedRole,
-                    );
-                }
-            }
         }
     }
 };

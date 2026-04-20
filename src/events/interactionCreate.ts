@@ -18,16 +18,23 @@ export const handleInteractionCreate = async (interaction: Interaction) => {
         await command.execute(ctx);
     } catch (error) {
         logger.error(`Error executing ${interaction.commandName}:`, error);
-        if (interaction.replied || interaction.deferred) {
-            await interaction.followUp({
-                content: "There was an error while executing this command!",
-                flags: MessageFlags.Ephemeral,
-            });
-        } else {
-            await interaction.reply({
-                content: "There was an error while executing this command!",
-                flags: MessageFlags.Ephemeral,
-            });
+        try {
+            if (interaction.replied || interaction.deferred) {
+                await interaction.followUp({
+                    content: "There was an error while executing this command!",
+                    flags: MessageFlags.Ephemeral,
+                });
+            } else {
+                await interaction.reply({
+                    content: "There was an error while executing this command!",
+                    flags: MessageFlags.Ephemeral,
+                });
+            }
+        } catch (fallbackError) {
+            logger.error(
+                "Failed to send interaction error fallback message.",
+                fallbackError,
+            );
         }
     }
 };

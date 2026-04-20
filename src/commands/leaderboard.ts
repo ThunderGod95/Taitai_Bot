@@ -4,6 +4,9 @@ import {
     ActionRowBuilder,
     StringSelectMenuBuilder,
     ComponentType,
+    MessageFlags,
+    ChatInputCommandInteraction,
+    Message,
 } from "discord.js";
 import { fetchLeaderboardData } from "@/services/dataService";
 import { generateLeaderboardImage } from "@/services/imageService";
@@ -16,27 +19,85 @@ const leaderboardCache = new Map<
 
 export const data = new SlashCommandBuilder()
     .setName("leaderboard")
-    .setDescription("View the top users ranked by XP.");
+    .setDescription("View the top users ranked by XP.")
+    .addStringOption((option) =>
+        option
+            .setName("type")
+            .setDescription("The type of leaderboard to view")
+            .addChoices(
+                { name: "Overall XP", value: "overall" },
+                { name: "Weekly XP", value: "weekly" },
+                { name: "Monthly XP", value: "monthly" },
+                { name: "Reactions", value: "reactions" },
+                { name: "Voice Time", value: "voice" },
+            )
+            .setRequired(false),
+    );
 
 export const aliasData = new SlashCommandBuilder()
     .setName("lb")
-    .setDescription("View the top users ranked by XP.");
+    .setDescription("View the top users ranked by XP.")
+    .addStringOption((option) =>
+        option
+            .setName("type")
+            .setDescription("The type of leaderboard to view")
+            .addChoices(
+                { name: "Overall XP", value: "overall" },
+                { name: "Weekly XP", value: "weekly" },
+                { name: "Monthly XP", value: "monthly" },
+                { name: "Reactions", value: "reactions" },
+                { name: "Voice Time", value: "voice" },
+            )
+            .setRequired(false),
+    );
 
 export const execute = async (ctx: CommandContext) => {
     await ctx.deferReply();
 
-    const generatePayload = async (timeframe: string) => {
-        const data = fetchLeaderboardData(10, timeframe);
+    let initialType = "overall";
+
+    if (ctx.isInteraction) {
+        const interaction = ctx.raw as ChatInputCommandInteraction;
+        initialType = interaction.options.getString("type") || "overall";
+    } else {
+        const args = (ctx.raw as Message).content.split(/ +/).slice(1);
+        const parsedArg = args[0]?.toLowerCase();
+
+        const validTypes = [
+            "overall",
+            "weekly",
+            "monthly",
+            "reactions",
+            "voice",
+        ];
+        if (parsedArg && validTypes.includes(parsedArg)) {
+            initialType = parsedArg;
+        }
+    }
+
+    const generatePayload = async (type: string) => {
+        const data = fetchLeaderboardData(10, type);
         if (!data || data.length === 0) return null;
 
-        const cacheKey = `lb_${timeframe}`;
+        // Grab fresh avatar URLs from the cache to prevent 404s
+        for (const user of data) {
+            const cachedUser = ctx.raw.client.users.cache.get(user.id);
+            if (cachedUser) {
+                user.avatar_url = cachedUser.displayAvatarURL({
+                    extension: "png",
+                    size: 256,
+                });
+            }
+        }
+
+        const cacheKey = `lb_${type}`;
         const cached = leaderboardCache.get(cacheKey);
         let buffer: Buffer;
 
         if (cached && cached.expiresAt > Date.now()) {
             buffer = cached.buffer;
         } else {
-            buffer = await generateLeaderboardImage(data, timeframe);
+            buffer = await generateLeaderboardImage(data, type);
             leaderboardCache.set(cacheKey, {
                 buffer,
                 expiresAt: Date.now() + 60_000,
@@ -51,14 +112,16 @@ export const execute = async (ctx: CommandContext) => {
             overall: "Overall Leaderboard",
             weekly: "Weekly Top Earners",
             monthly: "Monthly Top Earners",
+            reactions: "Top Reactions Given",
+            voice: "Top Voice Time",
         };
-        const messageTitle = titles[timeframe] || "Leaderboard";
+        const messageTitle = titles[type] || "Leaderboard";
 
         const selectMenu =
             new ActionRowBuilder<StringSelectMenuBuilder>().addComponents(
                 new StringSelectMenuBuilder()
-                    .setCustomId("lb_timeframe_select")
-                    .setPlaceholder("Select Timeframe")
+                    .setCustomId("lb_type_select")
+                    .setPlaceholder("Select Type")
                     .addOptions([
                         {
                             label: "Overall XP",
@@ -75,6 +138,16 @@ export const execute = async (ctx: CommandContext) => {
                             value: "monthly",
                             description: "Top earners in the last 30 days",
                         },
+                        {
+                            label: "Reactions",
+                            value: "reactions",
+                            description: "Most reactions given",
+                        },
+                        {
+                            label: "Voice Time",
+                            value: "voice",
+                            description: "Most time spent in voice channels",
+                        },
                     ]),
             );
 
@@ -85,7 +158,7 @@ export const execute = async (ctx: CommandContext) => {
         };
     };
 
-    const initialPayload = await generatePayload("overall");
+    const initialPayload = await generatePayload(initialType);
     if (!initialPayload) {
         return ctx.editReply("The leaderboard is currently empty.");
     }
@@ -101,15 +174,15 @@ export const execute = async (ctx: CommandContext) => {
         if (i.user.id !== ctx.user.id) {
             await i.reply({
                 content: "You cannot interact with this menu.",
-                ephemeral: true,
+                flags: MessageFlags.Ephemeral,
             });
             return;
         }
 
         await i.deferUpdate();
-        const selectedTimeframe = i.values[0];
+        const selectedType = i.values[0];
 
-        const newPayload = await generatePayload(selectedTimeframe!);
+        const newPayload = await generatePayload(selectedType!);
         if (newPayload) await i.editReply(newPayload);
     });
 

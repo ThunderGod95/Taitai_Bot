@@ -3,12 +3,12 @@ import { fetchLeaderboardData } from "@/services/dataService";
 
 export const leaderboardRoutes = new Elysia({ prefix: "/api/leaderboard" }).get(
     "/",
-    ({ query: { timeframe = "overall", limit = "10" } }) => {
+    ({ query: { type = "overall", limit = "10" } }) => {
         const parsedLimit = parseInt(limit, 10);
-        const data = fetchLeaderboardData(parsedLimit, timeframe);
+        const data = fetchLeaderboardData(parsedLimit, type);
 
         return {
-            timeframe,
+            type,
             limit: parsedLimit,
             leaderboard: data,
         };

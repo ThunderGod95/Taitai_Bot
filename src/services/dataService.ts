@@ -2,9 +2,11 @@ import {
     getUserQuery,
     getUserRankQuery,
     getOverallLeaderboardQuery,
-    getTimeframeLeaderboardQuery,
+    getTypeLeaderboardQuery,
+    getReactionsLeaderboardQuery,
+    getVoiceLeaderboardQuery,
 } from "@/db";
-import { calculateXpForNextLevel } from "./xpService";
+import { BOT_UNKNOWNS, calculateXpForNextLevel } from "./xpService";
 
 export const fetchUserRankData = (userId: string) => {
     const userData = getUserQuery.get({ $id: userId });
@@ -25,11 +27,11 @@ export const fetchUserRankData = (userId: string) => {
 
 export const fetchLeaderboardData = (
     limit: number = 10,
-    timeframe: string = "overall",
+    type: string = "overall",
 ) => {
     let rawData;
 
-    if (timeframe === "overall") {
+    if (type === "overall") {
         rawData = getOverallLeaderboardQuery
             .all({ $limit: limit })
             .map((u) => ({
@@ -40,17 +42,39 @@ export const fetchLeaderboardData = (
                 xp: u.xp,
                 total_xp: u.lifetime_xp,
             }));
+    } else if (type === "reactions") {
+        rawData = getReactionsLeaderboardQuery
+            .all({ $limit: limit })
+            .map((u) => ({
+                id: u.id,
+                username: u.username,
+                avatar_url: u.avatar_url,
+                level: u.level,
+                xp: u.xp,
+                total_xp: u.reactions_given,
+            }));
+    } else if (type === "voice") {
+        rawData = getVoiceLeaderboardQuery.all({ $limit: limit }).map((u) => ({
+            id: u.id,
+            username: u.username,
+            avatar_url: u.avatar_url,
+            level: u.level,
+            xp: u.xp,
+            total_xp: u.voice_time_minutes,
+        }));
     } else {
         const date = new Date();
-        if (timeframe === "weekly") date.setDate(date.getDate() - 7);
-        if (timeframe === "monthly") date.setMonth(date.getMonth() - 1);
+        if (type === "weekly") date.setDate(date.getDate() - 7);
+        if (type === "monthly") date.setMonth(date.getMonth() - 1);
 
         const since = date.toISOString().replace("T", " ").split(".")[0];
-        rawData = getTimeframeLeaderboardQuery.all({
+        rawData = getTypeLeaderboardQuery.all({
             $limit: limit,
             $since: since!,
         });
     }
+
+    rawData = rawData.filter((u) => !BOT_UNKNOWNS.includes(u.id));
 
     return rawData.map((user) => ({
         ...user,
