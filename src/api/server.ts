@@ -13,6 +13,7 @@ import { userRoutes } from "./handlers/user";
 import { roleRewardsRoutes } from "./handlers/roleRewards";
 import { boosterRoutes } from "./handlers/boosters";
 import cors from "@elysiajs/cors";
+import { cultivationRoutes } from "./handlers/cultivation";
 
 export let config: Settings = getSettings();
 
@@ -25,6 +26,7 @@ export const startApiServer = (client: Client) => {
         .use(userRoutes)
         .use(adminsRoutes)
         .use(boosterRoutes)
+        .use(cultivationRoutes)
         .use(serverRolesRoutes(client))
         .use(channelsRoutes(client))
         .use(xpRoutes(client))
