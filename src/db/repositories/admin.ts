@@ -12,6 +12,10 @@ export const addAdminQuery = db.query<
 
 export const clearAdminsQuery = db.query<void, []>(`DELETE FROM server_admins`);
 
+export const removeAdminQuery = db.query<void, { $user_id: string }>(
+    `DELETE FROM server_admins WHERE user_id = $user_id`,
+);
+
 export const insertAuditLogQuery = db.query<
     void,
     {

@@ -7,6 +7,7 @@ import {
     MessageFlags,
     ChatInputCommandInteraction,
     Message,
+    EmbedBuilder,
 } from "discord.js";
 import { fetchLeaderboardData } from "@/services/dataService";
 import { generateLeaderboardImage } from "@/services/imageService";
@@ -150,6 +151,11 @@ export const execute = async (ctx: CommandContext) => {
                         },
                     ]),
             );
+
+        const embed = new EmbedBuilder()
+            .setTitle(messageTitle)
+            .setImage(`attachment://${cacheKey}.png`)
+            .setColor("#2b2d31");
 
         return {
             content: `# ${messageTitle}`,

@@ -12,11 +12,13 @@ import { leaderboardRoutes } from "./handlers/leaderboard";
 import { userRoutes } from "./handlers/user";
 import { roleRewardsRoutes } from "./handlers/roleRewards";
 import { boosterRoutes } from "./handlers/boosters";
+import cors from "@elysiajs/cors";
 
 export let config: Settings = getSettings();
 
 export const startApiServer = (client: Client) => {
     const app = new Elysia()
+        .use(cors())
         .use(settingsRoutes)
         .use(roleRewardsRoutes)
         .use(leaderboardRoutes)
@@ -26,7 +28,7 @@ export const startApiServer = (client: Client) => {
         .use(serverRolesRoutes(client))
         .use(channelsRoutes(client))
         .use(xpRoutes(client))
-        .listen(3000);
+        .listen({ port: 8484, hostname: "0.0.0.0" });
 
     logger.info(
         `API Server running at ${app.server?.hostname}:${app.server?.port}`,

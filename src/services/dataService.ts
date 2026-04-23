@@ -64,10 +64,22 @@ export const fetchLeaderboardData = (
         }));
     } else {
         const date = new Date();
-        if (type === "weekly") date.setDate(date.getDate() - 7);
-        if (type === "monthly") date.setMonth(date.getMonth() - 1);
+        let since: string;
 
-        const since = date.toISOString().replace("T", " ").split(".")[0];
+        if (type === "weekly") {
+            const day = date.getDay();
+            const diff = date.getDate() - day + (day === 0 ? -6 : 1);
+            date.setDate(diff);
+            date.setHours(0, 0, 0, 0);
+            since = date.toISOString().replace("T", " ").split(".")[0]!;
+        } else if (type === "monthly") {
+            date.setDate(1);
+            date.setHours(0, 0, 0, 0);
+            since = date.toISOString().replace("T", " ").split(".")[0]!;
+        } else {
+            since = date.toISOString().replace("T", " ").split(".")[0]!;
+        }
+
         rawData = getTypeLeaderboardQuery.all({
             $limit: limit,
             $since: since!,

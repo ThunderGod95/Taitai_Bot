@@ -30,8 +30,6 @@ const client = new Client({
 });
 
 (async () => {
-    initDb();
-
     const { commands } = await loadCommands();
     client.commands = commands;
 

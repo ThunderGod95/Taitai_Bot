@@ -2,8 +2,8 @@ import { insertAuditLogQuery } from "@/db";
 import { logger } from "@/utils/logger";
 
 export const logAuditAction = (
-    adminId: string,
-    actionType: "SETTINGS_UPDATE" | "XP_MANUAL_MOD",
+    adminId: string, // This will also accept the donors id when actionType is "XP_DONATE"
+    actionType: "SETTINGS_UPDATE" | "XP_MANUAL_MOD" | "XP_DONATE",
     targetId: string | null,
     changes: object | string,
 ) => {

@@ -6,9 +6,21 @@ import { calculateHighestMultiplier } from "./boosterService";
 import { processRoleRewards } from "./roleService";
 import { dispatchLevelUpMessage } from "./notificationService";
 
-const xpCooldowns = new Set<string>();
+const xpCooldowns = new Map<string, number>();
 
-export const BOT_UNKNOWNS = ["1413099172856594492"];
+setInterval(
+    () => {
+        const now = Date.now();
+        for (const [key, timestamp] of xpCooldowns.entries()) {
+            if (now - timestamp > config.cooldown) {
+                xpCooldowns.delete(key);
+            }
+        }
+    },
+    60 * 60 * 1000,
+);
+
+export const BOT_UNKNOWNS: string[] = [];
 
 export const calculateXpForNextLevel = (level: number) =>
     Math.floor((level * config.base_xp + 75) * config.multiplier);
@@ -29,11 +41,14 @@ export const handleXp = (
     if (BOT_UNKNOWNS.includes(userId)) return null;
 
     if (cooldownKey) {
-        if (xpCooldowns.has(cooldownKey)) return null;
-        xpCooldowns.add(cooldownKey);
-        setTimeout(() => {
-            xpCooldowns.delete(cooldownKey);
-        }, config.cooldown);
+        const now = Date.now();
+        const lastGained = xpCooldowns.get(cooldownKey);
+
+        if (lastGained && now - lastGained < config.cooldown) {
+            return null;
+        }
+
+        xpCooldowns.set(cooldownKey, now);
     }
 
     const userData = getOrCreateUser(userId, username, avatarUrl);

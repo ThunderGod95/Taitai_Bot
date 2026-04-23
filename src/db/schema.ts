@@ -102,4 +102,21 @@ export function initDb() {
         )
     `,
     ).run();
+
+    db.query(
+        `
+        CREATE TABLE IF NOT EXISTS xp_donations (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            donor_id TEXT NOT NULL,
+            recipient_id TEXT NOT NULL,
+            amount INTEGER NOT NULL,
+            timestamp DATETIME DEFAULT CURRENT_TIMESTAMP,
+            FOREIGN KEY(donor_id) REFERENCES users(id),
+            FOREIGN KEY(recipient_id) REFERENCES users(id)
+        )
+    `,
+    ).run();
 }
+
+// To make sure the tables are created before anything else is run.
+initDb();

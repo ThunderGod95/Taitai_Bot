@@ -38,3 +38,5 @@ combine.ts
 combined/
 bot.db
 bot.log
+bot.db-shm
+bot.db-wal
