@@ -116,32 +116,6 @@ export function initDb() {
         )
     `,
     ).run();
-
-    db.query(
-        `
-        CREATE TABLE IF NOT EXISTS cultivation_roles (
-            role_id TEXT PRIMARY KEY,
-            role_type TEXT NOT NULL CHECK(role_type IN ('lineage', 'realm')),
-            name TEXT NOT NULL,
-            tier INTEGER DEFAULT 0
-            -- Tier allows sorting (e.g., Embryonic=1, Qi=2, Foundation=3, Purple Mansion=4, Golden Core=5)
-        )
-    `,
-    ).run();
-
-    db.query(
-        `
-        CREATE TABLE IF NOT EXISTS cultivation_attainments (
-            user_id TEXT NOT NULL,
-            lineage_role_id TEXT NOT NULL,
-            realm_role_id TEXT NOT NULL,
-            status TEXT DEFAULT 'unassigned',
-            PRIMARY KEY (user_id, lineage_role_id, realm_role_id),
-            FOREIGN KEY(lineage_role_id) REFERENCES cultivation_roles(role_id) ON DELETE CASCADE,
-            FOREIGN KEY(realm_role_id) REFERENCES cultivation_roles(role_id) ON DELETE CASCADE
-        )
-    `,
-    ).run();
 }
 
 // To make sure the tables are created before anything else is run.

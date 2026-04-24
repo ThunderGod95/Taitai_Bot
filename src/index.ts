@@ -10,7 +10,6 @@ import { logger } from "@/utils/logger";
 import { syncAdmins } from "@/services/adminService";
 import { handleGuildMemberUpdate } from "@/events/guildMemberUpdate";
 import { handleRoleUpdate } from "@/events/roleUpdate";
-import { initDb } from "@/db/schema";
 
 declare module "discord.js" {
     export interface Client {
