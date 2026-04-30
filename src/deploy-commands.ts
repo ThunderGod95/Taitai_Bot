@@ -1,5 +1,5 @@
 import { REST, Routes } from "discord.js";
-import { loadCommands } from "./utils/commandRegistry";
+import { loadCommands } from "@/registries/commandRegistry";
 
 const token = process.env.DISCORD_TOKEN;
 const clientId = process.env.CLIENT_ID;
@@ -28,7 +28,10 @@ const rest = new REST({ version: "10" }).setToken(token);
         console.log(
             `Successfully reloaded ${data.length} application (/) commands.`,
         );
+
+        process.exit(0);
     } catch (error) {
         console.error("Error deploying commands:", error);
+        process.exit(1);
     }
 })();

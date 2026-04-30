@@ -1,4 +1,12 @@
-import { SlashCommandBuilder, EmbedBuilder } from "discord.js";
+import {
+    SlashCommandBuilder,
+    EmbedBuilder,
+    ContainerBuilder,
+    TextDisplayBuilder,
+    SectionBuilder,
+    ThumbnailBuilder,
+    SeparatorBuilder,
+} from "discord.js";
 import type { CommandContext } from "@/utils/commandContext";
 import { fetchUserRankData } from "@/services/dataService";
 import { BOT_UNKNOWNS } from "@/services/xpService";
@@ -45,46 +53,71 @@ export const execute = async (ctx: CommandContext) => {
             .map((r) => `<@&${r.id}>`)
             .join(", ") || "None";
 
-    const embed = new EmbedBuilder()
-        .setAuthor({
-            name: targetUser.tag,
-            iconURL: targetUser.displayAvatarURL(),
-        })
-        .setColor(member.displayColor || [22, 26, 28])
-        .setThumbnail(targetUser.displayAvatarURL({ size: 512 }))
-        .addFields(
-            {
-                name: "Joined Server",
-                value: member.joinedAt
-                    ? `<t:${Math.floor(member.joinedAt.getTime() / 1000)}:R>`
-                    : "Unknown",
-                inline: true,
-            },
-            {
-                name: "Account Created",
-                value: `<t:${Math.floor(targetUser.createdAt.getTime() / 1000)}:R>`,
-                inline: true,
-            },
-            { name: "\u200B", value: "\u200B", inline: true }, // Spacer
-            {
-                name: "Roles",
-                value:
-                    roles.length > 1024 ? "Too many roles to display" : roles,
-                inline: false,
-            },
+    const joinedTimestamp = member.joinedAt
+        ? `<t:${Math.floor(member.joinedAt.getTime() / 1000)}:R>`
+        : "Unknown";
+    const createdTimestamp = `<t:${Math.floor(targetUser.createdAt.getTime() / 1000)}:R>`;
+    const boostingTimestamp = member.premiumSince
+        ? `<t:${Math.floor(member.premiumSince.getTime() / 1000)}:R>`
+        : "Not boosting";
+
+    const displayName =
+        member.nickname || targetUser.globalName || targetUser.username;
+    const isBot = targetUser.bot ? "🤖 **Bot**" : "👤 **User**";
+    const highestRole =
+        member.roles.highest.id !== guild.id
+            ? `<@&${member.roles.highest.id}>`
+            : "None";
+
+    const container = new ContainerBuilder()
+        .setAccentColor(member.displayColor || [22, 26, 28])
+        .addSectionComponents(
+            new SectionBuilder()
+                .addTextDisplayComponents(
+                    new TextDisplayBuilder({
+                        content: `## ${displayName}\n**Tag:** ${targetUser.tag}  •  **ID:** ${targetUser.id}  •  ${isBot}`,
+                    }),
+                )
+                .setThumbnailAccessory(
+                    new ThumbnailBuilder({
+                        description: "user avatar",
+                        media: {
+                            url: targetUser.displayAvatarURL(),
+                        },
+                    }),
+                ),
+        )
+        .addSeparatorComponents(new SeparatorBuilder())
+
+        .addTextDisplayComponents(
+            new TextDisplayBuilder({
+                content: `### Account Details\n**Joined Server:** ${joinedTimestamp}\n**Account Created:** ${createdTimestamp}\n**Server Booster:** ${boostingTimestamp}\n`,
+            }),
+        )
+        .addSeparatorComponents(new SeparatorBuilder())
+
+        .addTextDisplayComponents(
+            new TextDisplayBuilder({
+                content: `### Roles\n**Lineage:** ${highestRole}\n\n**All Roles:**\n${roles.length > 2000 ? "Too many roles to display" : roles}\n`,
+            }),
         );
 
     if (rankData && !BOT_UNKNOWNS.includes(targetUser.id)) {
-        embed.addFields(
-            { name: "Level", value: `${rankData.level}`, inline: true },
-            {
-                name: "Total XP",
-                value: `${rankData.lifetime_xp}`,
-                inline: true,
-            },
-            { name: "Rank", value: `#${rankData.rank}`, inline: true },
-        );
+        container
+            .addSeparatorComponents(new SeparatorBuilder())
+            .addTextDisplayComponents(
+                new TextDisplayBuilder({
+                    content: `### Server Stats\n**Level:** ${rankData.level}  •  **Total XP:** ${rankData.lifetime_xp}  •  **Rank:** #${rankData.rank}\n`,
+                }),
+            );
     }
 
-    await ctx.editReply({ embeds: [embed] });
+    await ctx.editReply({
+        flags: ["IsComponentsV2"] as const,
+        components: [container],
+        allowedMentions: {
+            parse: [],
+            repliedUser: true,
+        },
+    });
 };

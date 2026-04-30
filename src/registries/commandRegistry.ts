@@ -1,9 +1,9 @@
-import { Collection } from "discord.js";
+import { Client, Collection } from "discord.js";
 import fs from "fs";
 import path from "path";
-import { logger } from "./logger";
+import { logger } from "@/utils/logger";
 
-export const loadCommands = async () => {
+export const loadCommands = async (client: Client | null = null) => {
     const commands = new Collection<string, any>();
     const restPayloads: any[] = [];
 
@@ -29,6 +29,10 @@ export const loadCommands = async () => {
                 `The command at ${filePath} is missing a required "data" or "execute" property.`,
             );
         }
+    }
+
+    if (client) {
+        client.commands = commands;
     }
 
     return { commands, restPayloads };

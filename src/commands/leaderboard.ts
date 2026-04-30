@@ -8,6 +8,11 @@ import {
     ChatInputCommandInteraction,
     Message,
     EmbedBuilder,
+    ContainerBuilder,
+    SectionBuilder,
+    TextDisplayBuilder,
+    FileBuilder,
+    MediaGalleryBuilder,
 } from "discord.js";
 import { fetchLeaderboardData } from "@/services/dataService";
 import { generateLeaderboardImage } from "@/services/imageService";
@@ -152,15 +157,24 @@ export const execute = async (ctx: CommandContext) => {
                     ]),
             );
 
-        const embed = new EmbedBuilder()
-            .setTitle(messageTitle)
-            .setImage(`attachment://${cacheKey}.png`)
-            .setColor("#2b2d31");
+        const container = new ContainerBuilder()
+            .addTextDisplayComponents(
+                new TextDisplayBuilder().setContent(`# ${messageTitle}`),
+            )
+            .addMediaGalleryComponents(
+                new MediaGalleryBuilder().addItems({
+                    description: `${messageTitle}`,
+                    media: {
+                        url: `attachment://${cacheKey}.png`,
+                    },
+                }),
+            )
+            .addActionRowComponents(selectMenu);
 
         return {
-            content: `# ${messageTitle}`,
+            flags: ["IsComponentsV2"] as const,
             files: [attachment],
-            components: [selectMenu],
+            components: [container],
         };
     };
 

@@ -1,4 +1,10 @@
-import { SlashCommandBuilder, EmbedBuilder } from "discord.js";
+import {
+    SlashCommandBuilder,
+    ContainerBuilder,
+    TextDisplayBuilder,
+    MediaGalleryBuilder,
+    MediaGalleryItemBuilder,
+} from "discord.js";
 import type { CommandContext } from "@/utils/commandContext";
 
 export const data = new SlashCommandBuilder()
@@ -27,13 +33,28 @@ export const execute = async (ctx: CommandContext) => {
     const targetUser = ctx.getTargetUser();
 
     const avatarUrl = targetUser.displayAvatarURL({
-        size: 1024,
+        size: 2048,
     });
 
-    const embed = new EmbedBuilder()
-        .setTitle(`${targetUser.username}'s Avatar`)
-        .setImage(avatarUrl)
-        .setColor([22, 26, 28]);
+    const container = new ContainerBuilder()
+        .addTextDisplayComponents(
+            new TextDisplayBuilder({
+                content: `###  ${targetUser.displayName} | ${targetUser.tag}`,
+            }),
+        )
+        .addMediaGalleryComponents(
+            new MediaGalleryBuilder().addItems(
+                new MediaGalleryItemBuilder({
+                    description: `${targetUser.tag}'s avatar`,
+                    media: {
+                        url: avatarUrl,
+                    },
+                }),
+            ),
+        );
 
-    await ctx.editReply({ embeds: [embed] });
+    await ctx.editReply({
+        flags: ["IsComponentsV2"] as const,
+        components: [container],
+    });
 };

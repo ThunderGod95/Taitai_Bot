@@ -1,7 +1,8 @@
 import winston from "winston";
+import DailyRotateFile from "winston-daily-rotate-file";
 import path from "path";
 
-const logFilePath = path.join(process.cwd(), "logs", "bot.log");
+const logDirectory = path.join(process.cwd(), "logs");
 
 export const logger = winston.createLogger({
     level: "info",
@@ -15,6 +16,14 @@ export const logger = winston.createLogger({
     ),
     transports: [
         new winston.transports.Console(),
-        new winston.transports.File({ filename: logFilePath }),
+
+        new DailyRotateFile({
+            dirname: logDirectory,
+            filename: "bot-%DATE%.log",
+            datePattern: "YYYY-MM-DD",
+            zippedArchive: true,
+            maxSize: "20m",
+            maxFiles: "14d",
+        }),
     ],
 });
